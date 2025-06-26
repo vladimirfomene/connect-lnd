@@ -118,7 +118,7 @@ app.post('/api/invoice', async (req, res) => {
 
         const invoice = await createInvoice({
             lnd: req.lnd,
-            sats,
+            tokens: sats,
             description: description || '',
         });
 
