@@ -69,7 +69,7 @@ const checkLndConnection = (req, res, next) => {
 app.use(checkLndConnection);
 
 // We need to import the methods we'll use from ln-service
-const { getWalletInfo, getChainBalance, getChannelBalance, createInvoice, getInvoices, pay } = require('ln-service');
+const { getWalletInfo, getChainBalance, getChannelBalance, createInvoice, getInvoices, pay, signMessage , verifyMessage, createHodlInvoice, createWallet } = require('ln-service');
 
 /**
  * @route   GET /api/getinfo
@@ -166,6 +166,68 @@ app.post('/api/pay', async (req, res) => {
     }
 });
 
+
+/**
+ * @route POST /api/signmessage
+ * @desc Sign a message with the LND node's private key.
+ * @body { message: string }
+ * 
+ */
+
+    app.post('/api/signmessage', async (req, res) => {
+
+        try {
+            const { message } = req.body;
+            if (!message || typeof message !== 'string') {
+                return res.status(400).json({ error: 'A `message` string is required.' });
+            }
+
+            // Use the ln-service's signMessage function
+            const { signature } = await signMessage({
+                lnd: req.lnd,
+                message: Buffer.from(message, 'utf8'),
+            });
+
+            res.json({ message, signature });
+        } catch (error) {
+            console.error('Error signing message:', error);
+            res.status(500).json({ error: 'Failed to sign message.', details: error });
+        }
+    })
+
+/**
+ * @route POST /api/verifymessage
+ * @desc Verify a signed message with the LND node's public key.
+ * @body { message: string, signature: string, pubkey: string }
+ * 
+ */
+
+app.post('/api/verifymessage', async (req, res) => {
+    try {
+        const { message, signature, pubkey } = req.body;
+
+        if (!message || !signature || !pubkey) {
+            return res.status(400).json({ error: 'All three params are required.' });
+        }
+
+        const isValid = await verifyMessage({
+            lnd: req.lnd,
+            message: Buffer.from(message, 'utf8'),
+            signature,
+            public_key: pubkey,
+        });
+
+        return res.json({ isValid });
+
+
+    } catch (error) {
+
+        console.error('Error verifying message:', error);
+        res.status(500).json({ error: 'Failed to verify message.', details: error });
+        
+    }
+})
+
 // --- 5. SERVER STARTUP ---
 const PORT = process.env.PORT || 5003;
 
@@ -180,5 +242,7 @@ app.listen(PORT, () => {
     console.log(`- GET    /api/invoices`);
     console.log(`- POST   /api/invoice  (Body: { "sats": 1000, "description": "Test" })`);
     console.log(`- POST   /api/pay      (Body: { "request": "lnbc..." })`);
+    console.log(`- POST   /api/signmessage (Body: { "message": "Hello, LND!" })`);
+    console.log(`- POST   /api/verifymessage (Body: { "message": "Hello, LND!", "signature": "...", "pubkey": "..." })`);
     console.log('----------------------------------------------------');
 });
